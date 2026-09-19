@@ -416,12 +416,12 @@ export default function MemberManagement() {
           type="button"
           onClick={() => setActiveTab('roster')}
           className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition duration-fast ${activeTab === 'roster'
-              ? 'border-brand-500 text-brand-400 bg-brand-500/5'
-              : 'border-transparent text-muted hover:text-ink hover:border-edge'
+            ? 'border-brand-500 text-brand-400 bg-brand-500/5'
+            : 'border-transparent text-muted hover:text-ink hover:border-edge'
             }`}
         >
           <UsersRound size={16} />
-          <span>Term Roster</span>
+          <span>Panel Members</span>
           {roster.length > 0 && (
             <span className="rounded-full bg-surface-3 px-2 py-0.5 font-mono text-xs text-subtle">
               {roster.length}
@@ -433,8 +433,8 @@ export default function MemberManagement() {
           type="button"
           onClick={() => setActiveTab('history')}
           className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition duration-fast ${activeTab === 'history'
-              ? 'border-brand-500 text-brand-400 bg-brand-500/5'
-              : 'border-transparent text-muted hover:text-ink hover:border-edge'
+            ? 'border-brand-500 text-brand-400 bg-brand-500/5'
+            : 'border-transparent text-muted hover:text-ink hover:border-edge'
             }`}
         >
           <History size={16} />
@@ -610,8 +610,8 @@ export default function MemberManagement() {
                     {/* Timeline Node Dot */}
                     <div
                       className={`absolute -left-6 sm:-left-8 top-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 bg-surface-1 transition ${isActive
-                          ? 'border-brand-500 text-brand-400 shadow-[0_0_10px_rgba(57,181,74,0.3)]'
-                          : 'border-edge text-subtle'
+                        ? 'border-brand-500 text-brand-400 shadow-[0_0_10px_rgba(57,181,74,0.3)]'
+                        : 'border-edge text-subtle'
                         }`}
                     >
                       <div
