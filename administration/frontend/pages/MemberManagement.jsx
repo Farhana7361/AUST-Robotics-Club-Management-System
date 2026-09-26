@@ -15,6 +15,9 @@ import {
   ShieldCheck,
   Building2,
   Filter,
+  Award,
+  Download,
+  ChevronRight,
 } from 'lucide-react'
 
 import Badge from '../../../shared-features/frontend/components/Badge.jsx'
@@ -27,6 +30,7 @@ import usePanelTerms from '../hooks/usePanelTerms.js'
 import usePositions from '../hooks/usePositions.js'
 import useTeams from '../hooks/useTeams.js'
 import useMemberships from '../hooks/useMemberships.js'
+import useCertificates from '../hooks/useCertificates.js'
 
 function formatDate(val) {
   if (!val) return '—'
@@ -64,6 +68,12 @@ export default function MemberManagement() {
     assignMember,
     endMembership,
   } = useMemberships()
+
+  const {
+    memberCertData,
+    memberCertLoading,
+    loadCertsByMember,
+  } = useCertificates()
 
   // Selected filters
   const [selectedTermId, setSelectedTermId] = useState('')
@@ -119,8 +129,11 @@ export default function MemberManagement() {
   useEffect(() => {
     if (selectedMemberId) {
       loadMemberHistory(selectedMemberId)
+      loadCertsByMember(selectedMemberId)
+    } else {
+      loadMemberHistory(null)
     }
-  }, [selectedMemberId, loadMemberHistory])
+  }, [selectedMemberId, loadMemberHistory, loadCertsByMember])
 
   // Current active term object
   const currentTerm = useMemo(() => {
@@ -565,7 +578,7 @@ export default function MemberManagement() {
                   </div>
                   <div className="border-l border-edge pl-3">
                     <span className="text-subtle block font-mono">Total Appointments</span>
-                    <span className="font-mono font-bold text-ink">{historyData.history.length}</span>
+                    <span className="font-mono font-bold text-ink">{historyData.history?.length ?? 0}</span>
                   </div>
                   <div className="border-l border-edge pl-3">
                     <span className="text-subtle block font-mono">Club Status</span>
@@ -589,12 +602,20 @@ export default function MemberManagement() {
                 Select an official AUSTRC club member from the dropdown above to inspect their complete, immutable appointment history across all executive terms.
               </p>
             </div>
-          ) : historyData?.history?.length === 0 ? (
+          ) : historyError ? (
+            <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-8 text-center">
+              <AlertCircle size={36} className="mx-auto text-red-400 mb-3" />
+              <p className="text-base font-medium text-ink">Failed to Load Member History</p>
+              <p className="text-sm text-subtle mt-1">{historyError}</p>
+            </div>
+          ) : !historyData ? (
+            <Loader label="Loading member appointment history..." />
+          ) : !historyData.history || historyData.history.length === 0 ? (
             <div className="rounded-lg border border-dashed border-edge p-12 text-center text-muted">
               <History size={36} className="mx-auto text-faint mb-3" />
               <p className="text-base font-medium text-ink">No Executive Appointments Found</p>
               <p className="text-sm text-subtle mt-1">
-                {historyData.member.member_name} has not been appointed to any executive panels yet.
+                {historyData.member?.member_name || 'This member'} has not been appointed to any executive panels yet.
               </p>
               <Button size="sm" variant="primary" onClick={openAssignModal} className="mt-4">
                 <UserPlus size={14} />
@@ -693,6 +714,97 @@ export default function MemberManagement() {
                             )}
                           </div>
                         </div>
+                      </div>
+
+                      {/* Certificate Section */}
+                      <div className="mt-4 pt-3 border-t border-edge-subtle">
+                        {(() => {
+                          const cert = memberCertData?.certificates?.find(
+                            (c) => Number(c.panel_membership_id) === Number(record.panel_membership_id)
+                          )
+
+                          if (memberCertLoading) {
+                            return (
+                              <div className="flex items-center gap-2 text-xs text-muted">
+                                <Award size={14} className="text-subtle animate-spin" />
+                                <span>Checking certificate record...</span>
+                              </div>
+                            )
+                          }
+
+                          if (cert) {
+                            const statusVariant =
+                              cert.status === 'DELIVERED'
+                                ? 'success'
+                                : cert.status === 'AVAILABLE'
+                                  ? 'brand'
+                                  : cert.status === 'ISSUED'
+                                    ? 'info'
+                                    : 'neutral'
+
+                            return (
+                              <div className="rounded border border-edge bg-surface-2 p-3 text-xs space-y-2">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <Award size={15} className="text-brand-400 shrink-0" />
+                                    <span className="font-semibold text-ink">Executive Certificate Record</span>
+                                    <span className="font-mono text-xs text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded border border-brand-500/20">
+                                      {cert.certificate_number}
+                                    </span>
+                                  </div>
+                                  <Badge variant={statusVariant} dot={cert.status === 'AVAILABLE' || cert.status === 'DELIVERED'}>
+                                    Status: {cert.status}
+                                  </Badge>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-subtle font-mono border-t border-edge-subtle pt-2">
+                                  <div>
+                                    <span className="text-faint">Snapshot Preserved:</span>{' '}
+                                    <span className="text-muted font-sans font-medium">
+                                      {cert.member_name_snapshot} ({cert.position_snapshot})
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-faint">Snapshot Date:</span>{' '}
+                                    <span className="text-muted">{formatDate(cert.snapshot_date)}</span>
+                                  </div>
+                                </div>
+
+                                {cert.status === 'AVAILABLE' && (
+                                  <div className="text-[11px] text-brand-400 font-mono flex items-center gap-1.5">
+                                    <CheckCircle2 size={12} />
+                                    <span>Certificate is validated and ready for delivery/distribution.</span>
+                                  </div>
+                                )}
+                                {cert.status === 'DELIVERED' && (
+                                  <div className="text-[11px] text-subtle font-mono flex items-center gap-1.5">
+                                    <CheckCircle2 size={12} className="text-brand-400" />
+                                    <span>Delivered on {formatDate(cert.delivered_at)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          }
+
+                          if (record.status === 'VOID') {
+                            return (
+                              <div className="flex items-center gap-2 text-xs text-subtle italic">
+                                <Award size={14} className="text-faint" />
+                                <span>Appointment was marked VOID — not eligible for an executive certificate.</span>
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <div className="flex items-center justify-between text-xs text-subtle rounded border border-dashed border-edge-subtle px-3 py-2 bg-surface-2/40">
+                              <div className="flex items-center gap-2">
+                                <Award size={14} className="text-faint" />
+                                <span>No executive certificate record generated yet for this term appointment.</span>
+                              </div>
+                              <span className="text-[11px] font-mono text-faint">Manageable via Panel Management</span>
+                            </div>
+                          )
+                        })()}
                       </div>
 
                       {/* Transition banner if subsequent term exists */}

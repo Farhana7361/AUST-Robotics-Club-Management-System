@@ -1,5 +1,5 @@
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Calendar,
   Layers,
@@ -11,6 +11,10 @@ import {
   XCircle,
   AlertCircle,
   X,
+  Award,
+  ChevronRight,
+  Clock,
+  Download,
 } from 'lucide-react'
 
 import Badge from '../../../shared-features/frontend/components/Badge.jsx'
@@ -22,6 +26,7 @@ import Loader from '../../../shared-features/frontend/components/Loader.jsx'
 import usePanelTerms from '../hooks/usePanelTerms.js'
 import usePositions from '../hooks/usePositions.js'
 import useTeams from '../hooks/useTeams.js'
+import useCertificates from '../hooks/useCertificates.js'
 
 function slugifyKey(name) {
   if (!name) return ''
@@ -40,7 +45,7 @@ function formatDate(val) {
 }
 
 export default function PanelManagement() {
-  const [activeTab, setActiveTab] = useState('terms') // 'terms' | 'positions' | 'teams'
+  const [activeTab, setActiveTab] = useState('terms') // 'terms' | 'positions' | 'teams' | 'certificates'
 
   // Hook data
   const {
@@ -75,6 +80,17 @@ export default function PanelManagement() {
     toggleStatus: toggleTeamStatus,
     clearError: clearTeamsError,
   } = useTeams()
+
+  const {
+    termCertData,
+    termCertLoading,
+    termCertError,
+    loadCertsByTerm,
+    actionLoading: certActionLoading,
+    createCertificate,
+    updateCertificateStatus,
+    clearErrors: clearCertErrors,
+  } = useCertificates()
 
   // Modals state
   const [termModalOpen, setTermModalOpen] = useState(false)
@@ -113,12 +129,50 @@ export default function PanelManagement() {
   const [teamFormError, setTeamFormError] = useState(null)
 
   // Current global error
-  const currentError = termsError || positionsError || teamsError
+  const currentError = termsError || positionsError || teamsError || termCertError
+
+  // Selected term for certificates tab
+  const [certTermId, setCertTermId] = useState('')
+  const [certSuccessMsg, setCertSuccessMsg] = useState(null)
+
+  // Load certificates when tab is active and term is selected
+  useEffect(() => {
+    if (activeTab === 'certificates' && certTermId) {
+      loadCertsByTerm(certTermId)
+    }
+  }, [activeTab, certTermId, loadCertsByTerm])
+
+  // Auto-select the first term when switching to certificates tab
+  useEffect(() => {
+    if (activeTab === 'certificates' && !certTermId && terms.length > 0) {
+      const activeTerm = terms.find((t) => t.status === 'ACTIVE') || terms[0]
+      setCertTermId(String(activeTerm.panel_term_id))
+    }
+  }, [activeTab, terms, certTermId])
 
   const dismissError = () => {
     clearTermsError()
     clearPositionsError()
     clearTeamsError()
+    clearCertErrors()
+  }
+
+  const handleIssueCertificate = async (membershipId) => {
+    const res = await createCertificate({ panel_membership_id: membershipId })
+    if (res.success) {
+      setCertSuccessMsg('Certificate record created successfully.')
+      setTimeout(() => setCertSuccessMsg(null), 4000)
+      loadCertsByTerm(certTermId)
+    }
+  }
+
+  const handleAdvanceCertStatus = async (certId, newStatus) => {
+    const res = await updateCertificateStatus(certId, { status: newStatus })
+    if (res.success) {
+      setCertSuccessMsg(`Certificate status updated to ${newStatus}.`)
+      setTimeout(() => setCertSuccessMsg(null), 4000)
+      loadCertsByTerm(certTermId)
+    }
   }
 
   // ── Term handlers ───────────────────────────────────────────────────────────
@@ -667,6 +721,18 @@ export default function PanelManagement() {
             {teams.length}
           </span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('certificates')}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition duration-fast ${activeTab === 'certificates'
+              ? 'border-brand-500 text-brand-400 bg-brand-500/5'
+              : 'border-transparent text-muted hover:text-ink hover:border-edge'
+            }`}
+        >
+          <Award size={16} />
+          <span>Certificates</span>
+        </button>
       </div>
 
       {/* Tab Panels */}
@@ -709,6 +775,198 @@ export default function PanelManagement() {
                 rows={teams.map((t) => ({ ...t, id: t.team_id }))}
                 emptyMessage="No teams registered yet. Click 'New Team' to set up functional sub-teams."
               />
+            )}
+          </div>
+        )}
+
+        {/* ── TAB: CERTIFICATES ──────────────────────────────────────────── */}
+        {activeTab === 'certificates' && (
+          <div className="space-y-5">
+
+            {/* Term selector bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-lg border border-edge bg-surface-1 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-brand-500/10 text-brand-400">
+                  <Award size={20} />
+                </div>
+                <div>
+                  <label htmlFor="cert_term_select" className="block text-[11px] font-mono uppercase tracking-wider text-subtle">
+                    Panel Term — Certificate View
+                  </label>
+                  {terms.length === 0 ? (
+                    <span className="text-sm text-muted">No terms available.</span>
+                  ) : (
+                    <select
+                      id="cert_term_select"
+                      value={certTermId}
+                      onChange={(e) => setCertTermId(e.target.value)}
+                      className="mt-0.5 rounded-sm border border-edge bg-surface-2 px-3 py-1 text-sm font-semibold text-ink focus:border-brand-500 focus:outline-none"
+                    >
+                      {terms.map((t) => (
+                        <option key={t.panel_term_id} value={t.panel_term_id}>
+                          {t.panel_title} ({t.status})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted max-w-sm">
+                Issue certificate records for panel members. Actual document generation is handled by the Shared/Core pipeline (coming soon).
+              </p>
+            </div>
+
+            {/* Success banner */}
+            {certSuccessMsg && (
+              <div className="flex items-center justify-between rounded-md border border-brand-500/40 bg-brand-500/10 px-4 py-3 text-sm text-brand-400 animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="shrink-0" />
+                  <span>{certSuccessMsg}</span>
+                </div>
+                <button type="button" onClick={() => setCertSuccessMsg(null)} className="text-brand-400 hover:opacity-80">
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+
+            {termCertLoading ? (
+              <Loader label="Loading certificate records for this term..." />
+            ) : !certTermId ? (
+              <div className="rounded-lg border border-dashed border-edge p-12 text-center">
+                <Award size={36} className="mx-auto text-faint mb-3" />
+                <p className="text-base font-medium text-ink">Select a Panel Term</p>
+                <p className="text-sm text-subtle mt-1">Choose a panel term above to view and manage its certificate records.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+
+                {/* Section A: Issued certificates */}
+                <div>
+                  <h3 className="text-sm font-semibold text-ink mb-3 flex items-center gap-2">
+                    <Award size={15} className="text-brand-400" />
+                    Issued Certificate Records
+                    <span className="rounded-full bg-surface-3 px-2 py-0.5 font-mono text-xs text-subtle">
+                      {termCertData?.issued?.length ?? 0}
+                    </span>
+                  </h3>
+
+                  {(!termCertData?.issued || termCertData.issued.length === 0) ? (
+                    <div className="rounded-lg border border-dashed border-edge py-8 text-center">
+                      <Award size={28} className="mx-auto text-faint mb-2" />
+                      <p className="text-sm font-medium text-ink">No certificates issued for this term yet.</p>
+                      <p className="text-xs text-subtle mt-1">Use the "Issue Certificate" actions below to create records.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {termCertData.issued.map((cert) => {
+                        const nextStatusMap = { PENDING: 'ISSUED', ISSUED: 'AVAILABLE', AVAILABLE: 'DELIVERED' }
+                        const nextStatus = nextStatusMap[cert.status]
+                        const statusVariantMap = { PENDING: 'warning', ISSUED: 'info', AVAILABLE: 'success', DELIVERED: 'neutral' }
+
+                        return (
+                          <div
+                            key={cert.member_certificate_id}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-edge bg-surface-1 px-4 py-3 hover:border-brand-500/30 transition"
+                          >
+                            <div className="flex items-start gap-3">
+                              <Award size={18} className="text-brand-400 shrink-0 mt-0.5" />
+                              <div>
+                                <p className="font-semibold text-sm text-ink">{cert.member_name_snapshot}</p>
+                                <p className="text-xs text-muted">{cert.position_snapshot}{cert.team_snapshot ? ` — ${cert.team_snapshot}` : ''}</p>
+                                <p className="font-mono text-[11px] text-subtle mt-0.5">#{cert.certificate_number}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 shrink-0">
+                              <Badge variant={statusVariantMap[cert.status] ?? 'neutral'}>
+                                {cert.status}
+                              </Badge>
+
+                              {nextStatus && (
+                                <button
+                                  type="button"
+                                  disabled={certActionLoading}
+                                  onClick={() => handleAdvanceCertStatus(cert.member_certificate_id, nextStatus)}
+                                  className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-brand-400 border border-brand-500/30 hover:bg-brand-500/10 transition disabled:opacity-50"
+                                  aria-label={`Advance to ${nextStatus}`}
+                                >
+                                  <ChevronRight size={12} />
+                                  {nextStatus}
+                                </button>
+                              )}
+
+                              {/* Coming-soon download stub — document not yet generated */}
+                              <button
+                                type="button"
+                                disabled
+                                title="Document generation coming soon — requires Shared/Core pipeline"
+                                className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-disabled border border-edge cursor-not-allowed"
+                                aria-label="Download certificate (coming soon)"
+                              >
+                                <Download size={12} />
+                                <span>Download</span>
+                                <span className="text-[10px] text-faint">(Soon)</span>
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Section B: Memberships needing a certificate */}
+                {termCertData?.withoutCertificate?.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-ink mb-3 flex items-center gap-2">
+                      <Clock size={15} className="text-warning" />
+                      Awaiting Certificate Record
+                      <span className="rounded-full bg-surface-3 px-2 py-0.5 font-mono text-xs text-subtle">
+                        {termCertData.withoutCertificate.length}
+                      </span>
+                    </h3>
+
+                    <div className="space-y-2">
+                      {termCertData.withoutCertificate.map((m) => (
+                        <div
+                          key={m.panel_membership_id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-edge border-dashed bg-surface-1 px-4 py-3"
+                        >
+                          <div>
+                            <p className="font-semibold text-sm text-ink">{m.member_name}</p>
+                            <p className="text-xs text-muted">{m.position_name}{m.team_name ? ` — ${m.team_name}` : ''}</p>
+                            <p className="font-mono text-[11px] text-subtle">{m.member_code}</p>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Badge variant={m.membership_status === 'ACTIVE' ? 'success' : 'neutral'}>
+                              {m.membership_status}
+                            </Badge>
+                            <button
+                              type="button"
+                              disabled={certActionLoading}
+                              onClick={() => handleIssueCertificate(m.panel_membership_id)}
+                              className="flex items-center gap-1 rounded px-3 py-1 text-xs font-semibold text-brand-400 border border-brand-500/40 hover:bg-brand-500/10 transition disabled:opacity-50"
+                              aria-label={`Issue certificate for ${m.member_name}`}
+                            >
+                              <Award size={12} />
+                              Issue Certificate Record
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* All done state */}
+                {termCertData?.withoutCertificate?.length === 0 && termCertData?.issued?.length > 0 && (
+                  <div className="flex items-center gap-2 rounded-md border border-brand-500/30 bg-brand-500/5 px-4 py-3 text-sm text-brand-400">
+                    <CheckCircle2 size={16} />
+                    <span>All panel memberships for this term have a certificate record.</span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
